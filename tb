@@ -1,1 +1,187 @@
+`timescale 1ns/1ps
 
+module tb;
+
+parameter addr_width = 4;
+parameter data_width = 8;
+
+reg wr_clk;
+reg wr_en;
+reg wr_rst;
+
+reg rd_clk;
+reg rd_en;
+reg rd_rst;
+
+reg  [data_width-1:0] data_in;
+wire [data_width-1:0] data_out;
+
+wire empty;
+wire full;
+
+
+/* DUT */
+
+async_top #(
+    .addr_width(addr_width),
+    .data_width(data_width)
+) dut (
+    .wr_clk(wr_clk),
+    .wr_rst(wr_rst),
+    .wr_en(wr_en),
+
+    .rd_clk(rd_clk),
+    .rd_rst(rd_rst),
+    .rd_en(rd_en),
+
+    .data_in(data_in),
+    .data_out(data_out),
+
+    .empty(empty),
+    .full(full)
+);
+
+
+/* WRITE CLOCK */
+
+initial begin
+    wr_clk = 0;
+
+    forever #5 wr_clk = ~wr_clk;    // 10 ns period
+end
+
+
+/* READ CLOCK */
+
+initial begin
+    rd_clk = 0;
+
+    forever #7 rd_clk = ~rd_clk;    // 14 ns period
+end
+
+
+/* TEST SEQUENCE */
+
+initial begin
+
+    /* Reset */
+
+    wr_rst = 0;
+    rd_rst = 0;
+
+    wr_en = 0;
+    rd_en = 0;
+
+    data_in = 0;
+
+    #20;
+
+    wr_rst = 1;
+    rd_rst = 1;
+
+    #20;
+
+
+    /* WRITE 11 */
+
+    @(negedge wr_clk);
+    wr_en   = 1;
+    data_in = 8'h11;
+
+
+    /* WRITE 22 */
+
+    @(negedge wr_clk);
+    data_in = 8'h22;
+
+
+    /* WRITE 33 */
+
+    @(negedge wr_clk);
+    data_in = 8'h33;
+
+
+    /* WRITE 44 */
+
+    @(negedge wr_clk);
+    data_in = 8'h44;
+
+
+    /* STOP WRITING */
+
+    @(negedge wr_clk);
+    wr_en = 0;
+
+
+    /*
+        Allow write Gray pointer to pass through
+        read-domain synchronizer.
+    */
+
+    #60;
+
+
+    /* START READING */
+
+    @(negedge rd_clk);
+    rd_en = 1;
+
+
+    repeat(4) begin
+        @(negedge rd_clk);
+
+        $display(
+            "READ DATA: Time=%0t Data_Out=%h Empty=%b",
+            $time,
+            data_out,
+            empty
+        );
+    end
+
+
+    /* STOP READING */
+
+    @(negedge rd_clk);
+    rd_en = 0;
+
+
+    #20;
+
+    $finish;
+
+end
+
+
+/* WRITE-SIDE DEBUG */
+
+always @(posedge wr_clk) begin
+
+    $display(
+        "WRITE: t=%0t en=%b full=%b addr=%h data=%h",
+        $time,
+        wr_en,
+        full,
+        dut.wr_address,
+        data_in
+    );
+
+end
+
+
+/* READ-SIDE DEBUG */
+
+always @(posedge rd_clk) begin
+
+    $display(
+        "READ : t=%0t en=%b empty=%b addr=%h data=%h",
+        $time,
+        rd_en,
+        empty,
+        dut.rd_address,
+        data_out
+    );
+
+end
+
+
+endmodule
